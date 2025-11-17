@@ -25,6 +25,8 @@ func main() {
 		jsonOut   bool
 		listKiali bool
 		namespace string
+		traceId   string
+		argsJSON  string
 		timeout   time.Duration
 	)
 
@@ -35,6 +37,8 @@ func main() {
 	flag.BoolVar(&jsonOut, "json", false, "If true, print JSON output instead of pretty formatting")
 	flag.BoolVar(&listKiali, "list-kiali-tools", false, "List all available Kiali-related tools and exit")
 	flag.StringVar(&namespace, "namespace", "", "Optional namespace to pass to validations_list tool")
+	flag.StringVar(&traceId, "trace-id", "", "Trace ID to pass to trace_details tool")
+	flag.StringVar(&argsJSON, "args", "", "JSON string with tool arguments (overrides other argument flags)")
 	flag.DurationVar(&timeout, "timeout", 30*time.Second, "Overall request timeout")
 	flag.Parse()
 
@@ -93,6 +97,7 @@ func main() {
 		kialiSet := map[string]struct{}{
 			"validations_list": {},
 			"graph":            {},
+			"trace_details":    {},
 		}
 		infos := make([]output.ToolInfo, 0)
 		for _, t := range toolsRes.Tools {
@@ -110,18 +115,33 @@ func main() {
 	}
 
 	// Build arguments based on known tools
-	args := map[string]any{}
-	switch toolName {
-	case "validations_list":
-		if strings.TrimSpace(namespace) != "" {
-			args["namespace"] = namespace
+	var args map[string]any
+	if argsJSON != "" {
+		// Parse JSON arguments if provided
+		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to parse JSON arguments: %v\n", err)
+			os.Exit(1)
 		}
-	case "graph":
-		if strings.TrimSpace(namespace) != "" {
-			args["namespace"] = namespace
+	} else {
+		// Build arguments from flags
+		args = make(map[string]any)
+		switch toolName {
+		case "validations_list":
+			if strings.TrimSpace(namespace) != "" {
+				args["namespace"] = namespace
+			}
+		case "graph":
+			if strings.TrimSpace(namespace) != "" {
+				args["namespace"] = namespace
+			}
+		case "trace_details":
+			if strings.TrimSpace(traceId) != "" {
+				args["traceId"] = traceId
+			}
+			// Note: traceId can also come from --args JSON, so we don't validate here
+		default:
+			// No specific args known; allow empty or future generic args
 		}
-	default:
-		// No specific args known; allow empty or future generic args
 	}
 	argsBytes, _ := json.Marshal(args)
 
