@@ -492,6 +492,29 @@
   },
   {
     "annotations": {
+      "title": "Trace: Details",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "description": "Get detailed information for a specific trace by its ID. Returns complete trace information including all spans, timing details, and metadata for in-depth analysis.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "traceId": {
+          "description": "Unique identifier of the trace to retrieve",
+          "type": "string"
+        }
+      },
+      "required": [
+        "traceId"
+      ]
+    },
+    "name": "trace_details"
+  },
+  {
+    "annotations": {
       "title": "Validations: List",
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -655,7 +678,7 @@
       "idempotentHint": true,
       "openWorldHint": true
     },
-    "description": "Get distributed tracing data for a specific workload in a namespace. Returns trace information including spans, duration, and error details for troubleshooting and performance analysis.",
+    "description": "Get distributed tracing data for a specific workload in a namespace. Returns trace information including spans, duration, and error details for troubleshooting and performance analysis. Note: startMicros and endMicros are typically required by the Kiali API.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -668,11 +691,11 @@
           "type": "string"
         },
         "startMicros": {
-          "description": "Start time for traces in microseconds since epoch (optional)",
+          "description": "Start time for traces in microseconds since epoch (required by Kiali API)",
           "type": "string"
         },
         "endMicros": {
-          "description": "End time for traces in microseconds since epoch (optional)",
+          "description": "End time for traces in microseconds since epoch (required by Kiali API)",
           "type": "string"
         },
         "limit": {
