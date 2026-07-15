@@ -83,7 +83,7 @@ jobs:
       pr-number: ${{ steps.check.outputs.pr-number }}
       pr-sha: ${{ steps.check.outputs.pr-sha }}
       is-pr: ${{ steps.check.outputs.is-pr }}
-      suite: ${{ steps.check.outputs.suite }}
+      suite: ${{ steps.suite.outputs.suite }}
     steps:
       - name: Check trigger conditions
         id: check
