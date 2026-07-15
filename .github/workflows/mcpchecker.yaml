@@ -63,10 +63,14 @@ jobs:
       actions: read
       # Needed to comment on the PR when the TOCTOU check fails
       pull-requests: write
-    # Never run on forks: the evaluation needs model/judge secrets that forks
-    # don't have, so it would only ever fail there.
+    # Upstream runs on schedule, workflow_dispatch, and PR comments.
+    # josunect/kiali-mcp-server is allowed for fork testing via workflow_dispatch only
+    # (configure MODEL_* and JUDGE_* secrets in fork Settings → Actions).
     if: |
-      github.repository == 'containers/kubernetes-mcp-server' &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.repository == 'josunect/kiali-mcp-server') &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'schedule' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'issue_comment' &&
