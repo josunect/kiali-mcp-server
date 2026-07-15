@@ -46,9 +46,8 @@ KIALI_SRC=~/dev/kiali_sources/kiali make setup-kiali-multicluster
 # MCP server (terminal 1)
 TOOLSETS=core,config,kiali MCP_CONFIG_DIR=dev/config/mcp-configs-multicluster make run-server
 
-# Evals (terminal 2) — same model credentials as other mcpchecker evals
-export MODEL_BASE_URL="https://api.openai.com/v1"
-export MODEL_KEY="sk-..."
+# Evals (terminal 2)
+export GEMINI_API_KEY="AIza..."
 make run-evals-multicluster
 ```
 
@@ -77,5 +76,5 @@ curl -sk -X POST "${KIALI_URL}api/chat/mcp/list_clusters" \
   - If `[toolset_configs.kiali].url` uses HTTPS and `[toolset_configs.kiali].insecure` is false, you must set `[toolset_configs.kiali].certificate_authority` with the path to the CA certificate file. Relative paths are resolved relative to the directory containing the config file.
   - For non-production environments you can set `[toolset_configs.kiali].insecure = true` to skip certificate verification.
 - Multicluster eval: `Tool 'list_clusters' not found` → Kiali too old; run `KIALI_SRC=~/path/to/kiali make redeploy-kiali-multicluster-dev`
-- Multicluster eval: agent returns empty output → check `MODEL_BASE_URL` / `MODEL_KEY` (same as `evals/openai-agent/agent.yaml`)
+- Multicluster eval: agent returns empty output → set `GEMINI_API_KEY` (agent/judge use `google:gemini-2.5-flash` in `evals/tasks/kiali/multicluster/`)
 

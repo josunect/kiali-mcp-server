@@ -1,0 +1,8 @@
+kind: Agent
+metadata:
+  name: "kiali-multicluster-agent"
+builtin:
+  type: "llm-agent"
+  model: "google:gemini-2.5-flash"
+# Before running, set:
+#   export GEMINI_API_KEY="AIza..."

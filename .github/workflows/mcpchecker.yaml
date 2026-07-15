@@ -65,7 +65,7 @@ jobs:
       pull-requests: write
     # Upstream runs on schedule, workflow_dispatch, and PR comments.
     # josunect/kiali-mcp-server is allowed for fork testing via workflow_dispatch only
-    # (configure MODEL_* and JUDGE_* secrets in fork Settings → Actions).
+    # (configure GEMINI_API_KEY in fork Settings → Actions for multicluster evals).
     if: |
       (github.repository == 'containers/kubernetes-mcp-server' ||
        github.repository == 'josunect/kiali-mcp-server') &&
@@ -440,11 +440,7 @@ jobs:
           assertion-pass-threshold: '0.8'
           working-directory: '.'
         env:
-          MODEL_BASE_URL: ${{ secrets.MODEL_BASE_URL }}
-          MODEL_KEY: ${{ secrets.MODEL_KEY }}
-          JUDGE_BASE_URL: ${{ secrets.JUDGE_BASE_URL }}
-          JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
-          JUDGE_MODEL_NAME: ${{ secrets.JUDGE_MODEL_NAME }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Cleanup
         if: always()
