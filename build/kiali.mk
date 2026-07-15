@@ -78,7 +78,7 @@ expose-kiali:
 	echo "Kiali is being exposed on http://localhost:20001"
 
 .PHONY: setup-kiali
-setup-kiali: install-istio install-gateway-api-crds update-kiali-version install-bookinfo-demo expose-kiali expose-bookinfo-demo ## Setup Kiali
+setup-kiali: install-istio update-kiali-version install-bookinfo-demo expose-kiali expose-bookinfo-demo ## Setup Kiali
 
 # Optional local Kiali checkout for multicluster hack scripts (override: KIALI_SRC=/path/to/kiali).
 KIALI_REF ?= master
