@@ -527,12 +527,17 @@ jobs:
           make stop-server || true
           make kind-delete-multicluster || true
 
-  # Create PR with results (scheduled runs only)
+  # Create PR with results (scheduled runs; also workflow_dispatch on josunect fork for testing)
   commit-results:
     name: Commit Evaluation Results
     needs: [check-trigger, run-evaluation]
-    # Only commit results on scheduled runs, not manual dispatch or PR comments
-    if: always() && github.event_name == 'schedule' && needs.run-evaluation.result == 'success'
+    # Upstream: scheduled runs only. josunect fork: also workflow_dispatch for local testing.
+    if: |
+      always() &&
+      needs.run-evaluation.result == 'success' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' &&
+        github.repository == 'josunect/kiali-mcp-server'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -620,15 +625,19 @@ jobs:
               --head "$BRANCH"
           fi
 
-  # Kiali multicluster results only (suite=kiali scheduled runs)
+  # Kiali multicluster results (suite=kiali scheduled runs; also workflow_dispatch on josunect fork).
+  # Needs commit-results so both jobs can share chore/update-eval-results without racing.
   commit-multicluster-results:
     name: Commit Kiali Multicluster Results
-    needs: [check-trigger, run-evaluation-multicluster]
+    needs: [check-trigger, run-evaluation-multicluster, commit-results]
     if: |
       always() &&
-      github.event_name == 'schedule' &&
       needs.check-trigger.outputs.label-selector == 'suite=kiali' &&
-      needs.run-evaluation-multicluster.result == 'success'
+      needs.run-evaluation-multicluster.result == 'success' &&
+      (needs.commit-results.result == 'success' || needs.commit-results.result == 'skipped') &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' &&
+        github.repository == 'josunect/kiali-mcp-server'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -638,6 +647,7 @@ jobs:
         uses: actions/checkout@v7.0.0
         with:
           ref: main
+          fetch-depth: 0
 
       - name: Download mcpchecker multicluster results
         uses: actions/download-artifact@v8
@@ -667,7 +677,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -B "$BRANCH"
+          # Reuse the branch from commit-results if it already exists (avoids force-push race).
+          if git fetch origin "$BRANCH" 2>/dev/null; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -B "$BRANCH"
+          fi
           git add evals/results/openai-agent-multicluster-latest.json
 
           if git diff --staged --quiet; then
