@@ -66,10 +66,15 @@ jobs:
       actions: read
       # Needed to comment on the PR when the evaluation is rejected
       pull-requests: write
-    # Never run on forks: the evaluation needs model/judge secrets that forks
-    # don't have, so it would only ever fail there.
+    # Upstream: schedule, workflow_dispatch, and PR review chain (workflow_run).
+    # josunect/kiali-mcp-server: workflow_dispatch only, for fork testing of
+    # multicluster evals (configure MODEL_*/JUDGE_* secrets in fork Settings → Actions).
+    # Do not merge this fork allowlist to containers/kubernetes-mcp-server.
     if: |
-      github.repository == 'containers/kubernetes-mcp-server' &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.repository == 'josunect/kiali-mcp-server') &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'schedule' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'workflow_run' &&
@@ -581,14 +586,20 @@ jobs:
           make stop-server || true
           make kind-delete-multicluster || true
 
-  # Create PR with results (scheduled runs only)
+  # Create PR with results (scheduled runs; also workflow_dispatch on josunect fork)
   commit-results:
     name: Commit Evaluation Results
     needs: [check-trigger, run-evaluation, run-evaluation-multicluster]
-    # Only commit results on scheduled runs. Use != 'cancelled' so partial
-    # results from passing suites are still committed when some matrix jobs fail.
+    # Upstream: scheduled runs only. Use != 'cancelled' so partial results from
+    # passing suites are still committed when some matrix jobs fail.
     # Multicluster results are included here to avoid racing on chore/update-eval-results.
-    if: always() && github.event_name == 'schedule' && needs.run-evaluation.result != 'cancelled'
+    # josunect fork: also workflow_dispatch for local testing.
+    if: |
+      always() &&
+      needs.run-evaluation.result != 'cancelled' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' &&
+        github.repository == 'josunect/kiali-mcp-server'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
