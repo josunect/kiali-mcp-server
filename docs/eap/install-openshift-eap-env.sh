@@ -36,6 +36,7 @@ ENABLE_TRAFFIC_GENERATOR="${ENABLE_TRAFFIC_GENERATOR:-1}"  # Continuous Kiali tr
 TRAFFIC_RATE="${TRAFFIC_RATE:-1}"
 ISTIO_BOOKINFO_BRANCH="${ISTIO_BOOKINFO_BRANCH:-master}"
 MODE="${MODE:-install}"  # install | delete
+ENABLE_CUSTOM_INGRESS_GATEWAY="${ENABLE_CUSTOM_INGRESS_GATEWAY:-1}"
 
 LABEL_KEY="eap.kiali.io/test"
 LABEL_VAL="eap-preconditions"
@@ -113,14 +114,17 @@ wait_for_pods_ready() {
 
 detect_istio_revision() {
   local rev=""
-  # With Sail, namespace label istio.io/rev expects the revision tag name
-  # (for example "default"), not the target version (for example "v1.30.3").
-  rev="$("${OC}" get istiorevisiontag default -o jsonpath='{.metadata.name}' 2>/dev/null || true)"
+  # Prefer the concrete revision value (e.g. default-v1-30-3) if present.
+  rev="$("${OC}" get istiorevisiontag default -o jsonpath='{.spec.targetRevision}' 2>/dev/null || true)"
+  if [[ -n "${rev}" ]]; then
+    # Normalize v1.30.3 -> default-v1-30-3
+    rev="default-${rev//./-}"
+  fi
   if [[ -z "${rev}" ]]; then
     rev="$("${OC}" get istiorevisiontag -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
   fi
   if [[ -z "${rev}" ]]; then
-    rev="default"
+    rev="default-v1-30-3"
   fi
   echo "${rev}"
 }
@@ -738,7 +742,8 @@ EOF
 # --- Bookinfo + traffic generator ---------------------------------------------
 
 install_istio_ingress_gateway() {
-  infomsg "Installing istio-ingressgateway in ${CONTROL_PLANE_NAMESPACE}"
+  local rev="$1"
+  infomsg "Installing istio-ingressgateway in ${CONTROL_PLANE_NAMESPACE} (rev=${rev})"
   "${OC}" apply -n "${CONTROL_PLANE_NAMESPACE}" -f - <<'EOF'
 apiVersion: v1
 kind: ServiceAccount
@@ -772,6 +777,7 @@ metadata:
   name: istio-ingressgateway
   labels:
     app: istio-ingressgateway
+    istio.io/rev: REV_PLACEHOLDER
 spec:
   selector:
     matchLabels:
@@ -783,7 +789,7 @@ spec:
       labels:
         app: istio-ingressgateway
         istio: ingressgateway
-        sidecar.istio.io/inject: "true"
+        istio.io/rev: REV_PLACEHOLDER
     spec:
       containers:
       - name: istio-proxy
@@ -814,6 +820,12 @@ spec:
     protocol: TCP
     targetPort: 443
 EOF
+  "${OC}" -n "${CONTROL_PLANE_NAMESPACE}" patch deployment istio-ingressgateway --type='json' \
+    -p="[\
+      {\"op\":\"replace\",\"path\":\"/metadata/labels/istio.io~1rev\",\"value\":\"${rev}\"},\
+      {\"op\":\"replace\",\"path\":\"/spec/template/metadata/labels/istio.io~1rev\",\"value\":\"${rev}\"}\
+    ]" >/dev/null 2>&1 || true
+  "${OC}" -n "${CONTROL_PLANE_NAMESPACE}" rollout status deployment/istio-ingressgateway --timeout=600s || true
 }
 
 install_bookinfo() {
@@ -840,7 +852,11 @@ EOF
   download_to "https://raw.githubusercontent.com/istio/istio/${ISTIO_BOOKINFO_BRANCH}/samples/bookinfo/networking/bookinfo-gateway.yaml" "${tmp_gateway}"
 
   "${OC}" label namespace "${BOOKINFO_NS}" "istio.io/rev=${rev}" --overwrite
-  install_istio_ingress_gateway
+  if [[ "${ENABLE_CUSTOM_INGRESS_GATEWAY}" == "1" ]]; then
+    install_istio_ingress_gateway "${rev}"
+  else
+    infomsg "Skipping custom istio-ingressgateway (ENABLE_CUSTOM_INGRESS_GATEWAY=${ENABLE_CUSTOM_INGRESS_GATEWAY})"
+  fi
   "${OC}" apply -n "${BOOKINFO_NS}" -f "${tmp_bookinfo}"
   "${OC}" apply -n "${BOOKINFO_NS}" -f "${tmp_gateway}"
   rm -f "${tmp_bookinfo}" "${tmp_gateway}"
@@ -850,7 +866,9 @@ EOF
   "${OC}" -n "${BOOKINFO_NS}" rollout status deployment --all --timeout=600s || true
 
   "${OC}" expose svc/productpage -n "${BOOKINFO_NS}" 2>/dev/null || true
-  "${OC}" expose svc/istio-ingressgateway --port http -n "${CONTROL_PLANE_NAMESPACE}" --name=istio-ingressgateway 2>/dev/null || true
+  if [[ "${ENABLE_CUSTOM_INGRESS_GATEWAY}" == "1" ]]; then
+    "${OC}" expose svc/istio-ingressgateway --port http -n "${CONTROL_PLANE_NAMESPACE}" --name=istio-ingressgateway 2>/dev/null || true
+  fi
 
   infomsg "Waiting for Bookinfo pods"
   wait_for_pods_ready "${BOOKINFO_NS}" 600s
@@ -860,8 +878,10 @@ install_traffic_generator() {
   local ingress_route=""
   infomsg "Installing Kiali Traffic Generator"
 
-  "${OC}" wait --for=jsonpath='{.status.ingress[].host}' --timeout=60s route istio-ingressgateway -n "${CONTROL_PLANE_NAMESPACE}" 2>/dev/null || true
-  ingress_route="$("${OC}" get route istio-ingressgateway -o jsonpath='{.spec.host}{"\n"}' -n "${CONTROL_PLANE_NAMESPACE}" 2>/dev/null || true)"
+  if [[ "${ENABLE_CUSTOM_INGRESS_GATEWAY}" == "1" ]]; then
+    "${OC}" wait --for=jsonpath='{.status.ingress[].host}' --timeout=60s route istio-ingressgateway -n "${CONTROL_PLANE_NAMESPACE}" 2>/dev/null || true
+    ingress_route="$("${OC}" get route istio-ingressgateway -o jsonpath='{.spec.host}{"\n"}' -n "${CONTROL_PLANE_NAMESPACE}" 2>/dev/null || true)"
+  fi
 
   if [[ -z "${ingress_route}" ]]; then
     "${OC}" wait --for=jsonpath='{.status.ingress[].host}' --timeout=60s route productpage -n "${BOOKINFO_NS}" 2>/dev/null || true
