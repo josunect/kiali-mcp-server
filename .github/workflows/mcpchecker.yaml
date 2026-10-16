@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: 'Which task suite to run (core, helm, kubevirt, kiali, tekton, netobserv, argocd, or all)'
+        description: 'Which task suite to run (core, helm, kubevirt, kiali, kiali-multicluster, tekton, netobserv, argocd, or all)'
         required: false
         default: 'core'
         type: choice
@@ -23,6 +23,7 @@ on:
           - helm
           - kubevirt
           - kiali
+          - kiali-multicluster
           - tekton
           - netobserv
           - argocd
@@ -181,7 +182,7 @@ jobs:
 
               // Parse suite from the review body (trusted — fetched from API).
               const suiteMatch = triggerReview.body.match(
-                /\/run-mcpchecker\s+(core|helm|kubevirt|kiali|tekton|netobserv|argocd|all)/i,
+                /\/run-mcpchecker\s+(core|helm|kubevirt|kiali-multicluster|kiali|tekton|netobserv|argocd|all)/i,
               );
               const suite = suiteMatch ? suiteMatch[1].toLowerCase() : '';
 
@@ -263,6 +264,9 @@ jobs:
               ;;
             kiali)
               MATRIX=$(append_kiali_multicluster "$(single_matrix kiali "${EVAL_DIR}/eval-kiali.yaml" "core,config,kiali")")
+              ;;
+            kiali-multicluster)
+              MATRIX=$(jq -nc --argjson mc "$kiali_multicluster_entry" '{include: [$mc]}')
               ;;
             tekton)
               MATRIX=$(single_matrix tekton "${EVAL_DIR}/eval-tekton.yaml" "core,config,tekton")
