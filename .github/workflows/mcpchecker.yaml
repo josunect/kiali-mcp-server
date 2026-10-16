@@ -68,10 +68,14 @@ jobs:
       actions: read
       # Needed to comment on the PR when the evaluation is rejected
       pull-requests: write
-    # Never run on forks: the evaluation needs model/judge secrets that forks
-    # don't have, so it would only ever fail there.
+    # Upstream: schedule, workflow_dispatch, and PR review chain (workflow_run).
+    # josunect/kiali-mcp-server: workflow_dispatch only (set MODEL_*/JUDGE_* secrets).
+    # Do not merge the josunect allowlist to containers/kubernetes-mcp-server.
     if: |
-      github.repository == 'containers/kubernetes-mcp-server' &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.repository == 'josunect/kiali-mcp-server') &&
+      (github.repository == 'containers/kubernetes-mcp-server' ||
+       github.event_name == 'workflow_dispatch') &&
       (github.event_name == 'schedule' ||
        github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'workflow_run' &&
@@ -492,13 +496,16 @@ jobs:
           path: eval-context/
           retention-days: 1
 
-  # Create PR with results (scheduled runs only)
+  # Create PR with results (scheduled runs; workflow_dispatch on josunect fork only)
   commit-results:
     name: Commit Evaluation Results
     needs: [check-trigger, run-evaluation]
-    # Only commit results on scheduled runs. Use != 'cancelled' so partial
-    # results from passing suites are still committed when some matrix jobs fail.
-    if: always() && github.event_name == 'schedule' && needs.run-evaluation.result != 'cancelled'
+    if: |
+      always() &&
+      needs.run-evaluation.result != 'cancelled' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' &&
+        github.repository == 'josunect/kiali-mcp-server'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
